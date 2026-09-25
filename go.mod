@@ -1,6 +1,6 @@
 module github.com/tamnd/pixiv-cli
 
-go 1.26.0
+go 1.26.6
 
 require (
 	github.com/tamnd/any-cli v0.4.13
