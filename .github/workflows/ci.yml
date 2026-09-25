@@ -46,6 +46,42 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: go tool cover -func=coverage.out | tail -1
 
+  # The binary ships for windows_amd64, so the platform the tests have never run
+  # on is the one most likely to break. Windows gets its own job rather than a
+  # matrix entry: -race needs cgo and a C compiler, which the hosted image has
+  # under MSYS2 but not on PATH, so the flags differ from the unix jobs.
+  test-windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    env:
+      CGO_ENABLED: "1"
+      PATH: C:\msys64\mingw64\bin;C:\msys64\usr\bin;${{ github.path }}
+    steps:
+      - uses: actions/checkout@v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -s -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt -s -w:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: go vet
+        run: go vet ./...
+      - name: build
+        run: go build ./...
+      - name: test
+        run: go test -race -count=1 -timeout=5m ./...
+
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 15
