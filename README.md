@@ -4,6 +4,8 @@ A command line for [Pixiv](https://www.pixiv.net/) and the [Pixiv
 encyclopedia](https://dic.pixiv.net/). One pure-Go binary, no account or API key
 required.
 
+[日本語版はこちら](README.ja.md)
+
 ```bash
 pixiv ranking                          # daily illustration ranking (top 50)
 pixiv ranking --mode weekly --content manga --limit 20
