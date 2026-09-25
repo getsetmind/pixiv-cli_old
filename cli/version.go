@@ -2,36 +2,47 @@ package cli
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"runtime"
 
 	"github.com/tamnd/any-cli/kit"
 )
 
-type versionCmd struct{ short bool }
-
-func newVersionCmd() kit.Command {
-	v := &versionCmd{}
-	return kit.Command{
-		Use:   "version",
-		Short: "Print version information",
-		Args:  kit.NoArgs,
-		Flags: v.flags,
-		Run:   v.run,
-	}
+// versionInfo is the record the version op emits. The fields come straight from
+// the ldflags variables in root.go rather than kit.NewVersion, which carries a
+// version and nothing else: the commit and build date would be lost.
+type versionInfo struct {
+	Version  string `json:"version"  kit:"id" table:"version"`
+	Commit   string `json:"commit"             table:"commit"`
+	Built    string `json:"built"              table:"built"`
+	Platform string `json:"platform"           table:"platform"`
+	Go       string `json:"go"                 table:"go"`
 }
 
-func (v *versionCmd) flags(f *kit.FlagSet) {
-	f.BoolVar(&v.short, "short", false, "print just the version number")
+type versionInput struct {
+	Short bool `kit:"flag" help:"print just the version number"`
 }
 
-func (v *versionCmd) run(_ context.Context, _ []string) error {
-	if v.short {
-		_, _ = fmt.Fprintln(os.Stdout, Version)
-		return nil
+// registerVersion installs the version op. It is a normal operation rather than
+// a hand-written command so that every output flag the rest of the CLI honours
+// -- -o, --fields, --template, --db -- applies here too; a command that wrote to
+// os.Stdout itself silently ignored them.
+func registerVersion(app *kit.App) {
+	kit.Handle(app, kit.OpMeta{
+		Name:    "version",
+		Summary: "Print version information",
+	}, runVersion)
+}
+
+func runVersion(_ context.Context, in versionInput, emit func(*versionInfo) error) error {
+	v := Version
+	if !in.Short {
+		v = "pixiv " + Version
 	}
-	_, _ = fmt.Fprintf(os.Stdout, "pixiv %s (commit %s, built %s, %s/%s, %s)\n",
-		Version, Commit, Date, runtime.GOOS, runtime.GOARCH, runtime.Version())
-	return nil
+	return emit(&versionInfo{
+		Version:  v,
+		Commit:   Commit,
+		Built:    Date,
+		Platform: runtime.GOOS + "/" + runtime.GOARCH,
+		Go:       runtime.Version(),
+	})
 }
