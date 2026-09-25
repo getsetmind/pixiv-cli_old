@@ -358,6 +358,31 @@ func TestDicArticleSurvivesInfoFailure(t *testing.T) {
 	}
 }
 
+func TestDicArticleWithoutCounters(t *testing.T) {
+	var calls []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/_api/get_article/", func(w http.ResponseWriter, _ *http.Request) {
+		calls = append(calls, "article")
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": 1, "tagName": "T", "categories": []string{"a"}})
+	})
+	mux.HandleFunc("/_api/get_article_info/", func(w http.ResponseWriter, _ *http.Request) {
+		calls = append(calls, "info")
+		_ = json.NewEncoder(w).Encode(map[string]any{"articleViewCount": 5})
+	})
+	c := newDicTestClient(t, mux)
+
+	e, err := c.Article(context.Background(), "T", "ja", WithoutCounters())
+	if err != nil {
+		t.Fatalf("Article: %v", err)
+	}
+	if len(calls) != 1 || calls[0] != "article" {
+		t.Errorf("requests = %v, want only the article call", calls)
+	}
+	if e.Title != "T" || e.Views != 0 {
+		t.Errorf("entry = %+v, want the article without counters", e)
+	}
+}
+
 func TestDicNodesText(t *testing.T) {
 	raw := `[{"tag":"header","children":[{"tag":"text","text":"概要"}]},{"tag":"p","children":[{"tag":"text","text":"本文。"},{"tag":"br"},{"tag":"text","text":"次の行"}]},{"tag":"unordered_list","children":[{"tag":"list_item","children":[{"tag":"bold","children":[{"tag":"text","text":"太字"}]}]}]},{"tag":"pixiv_image","id":123}]`
 	want := "## 概要\n\n本文。\n次の行\n\n- 太字"

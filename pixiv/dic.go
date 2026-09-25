@@ -123,9 +123,28 @@ func (c *Client) SearchArticles(ctx context.Context, query string, page int) ([]
 	return parseDicSearch(body)
 }
 
+// ArticleOption adjusts one article fetch.
+type ArticleOption func(*articleOptions)
+
+type articleOptions struct {
+	counters bool
+}
+
+// WithoutCounters drops the second request that carries view, work, comment,
+// and checklist counts. The entry keeps zero values for those fields, and the
+// fetch costs one request instead of two.
+func WithoutCounters() ArticleOption {
+	return func(o *articleOptions) { o.counters = false }
+}
+
 // Article fetches one encyclopedia article and its counters. lang selects the
 // article language and must be one of DicLangs.
-func (c *Client) Article(ctx context.Context, title, lang string) (*DicEntry, error) {
+func (c *Client) Article(ctx context.Context, title, lang string, opts ...ArticleOption) (*DicEntry, error) {
+	settings := articleOptions{counters: true}
+	for _, opt := range opts {
+		opt(&settings)
+	}
+
 	if lang == "" {
 		lang = DicLangs[0]
 	}
@@ -144,8 +163,10 @@ func (c *Client) Article(ctx context.Context, title, lang string) (*DicEntry, er
 	// The counters are a second call; treat them as optional so a hiccup there
 	// still yields the article itself.
 	var info wireDicInfo
-	if rawInfo, err := c.get(ctx, c.dicBaseURL+"/_api/get_article_info/"+esc+query, "application/json", dicReferer); err == nil {
-		_ = json.Unmarshal(rawInfo, &info)
+	if settings.counters {
+		if rawInfo, err := c.get(ctx, c.dicBaseURL+"/_api/get_article_info/"+esc+query, "application/json", dicReferer); err == nil {
+			_ = json.Unmarshal(rawInfo, &info)
+		}
 	}
 
 	e := &DicEntry{

@@ -76,6 +76,12 @@ either a bare article title or a `https://dic.pixiv.net/a/...` URL.
 | Flag | Default | Description |
 |---|---|---|
 | `--lang` | `ja` | Article language: ja, en |
+| `--no-counters` | off | Skip the second request that fills `views`, `works`, `comments`, and `checklists` |
+
+The counters are a second request against `/_api/get_article_info/`, and that
+request is the slower half of the fetch. Pass `--no-counters` when only the
+title, translation, categories, and body matter: the record keeps the counter
+fields at `0` and the call costs a single request.
 
 The article record carries a `body` field with the article rendered as plain
 text. It is present in `--output json`/`jsonl` and omitted from the table, so
@@ -122,6 +128,7 @@ pixiv dic article 初音ミク -o json | jq -r '.[0].body'
 
 # The English edition of an article
 pixiv dic article "Hatsune Miku" --lang en
+pixiv dic article 初音ミク --no-counters
 ```
 
 ## License

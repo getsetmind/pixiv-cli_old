@@ -104,9 +104,10 @@ type dicSearchInput struct {
 }
 
 type dicArticleInput struct {
-	Title  string  `kit:"arg" help:"article title, or a dic.pixiv.net URL"`
-	Lang   string  `kit:"flag" default:"ja" enum:"ja,en" help:"article language"`
-	Client *Client `kit:"inject"`
+	Title      string  `kit:"arg" help:"article title, or a dic.pixiv.net URL"`
+	Lang       string  `kit:"flag" default:"ja" enum:"ja,en" help:"article language"`
+	NoCounters bool    `kit:"flag,name=no-counters" help:"skip the view and work counters"`
+	Client     *Client `kit:"inject"`
 }
 
 // --- handlers ---
@@ -182,7 +183,12 @@ func getDicArticle(ctx context.Context, in dicArticleInput, emit func(*DicEntry)
 		return errs.Usage("unknown language %q, want one of %s", lang, strings.Join(DicLangs, ", "))
 	}
 
-	entry, err := in.Client.Article(ctx, title, lang)
+	opts := []ArticleOption{}
+	if in.NoCounters {
+		opts = append(opts, WithoutCounters())
+	}
+
+	entry, err := in.Client.Article(ctx, title, lang, opts...)
 	if err != nil {
 		if isHTTPStatus(err, http.StatusNotFound) {
 			return errs.NotFound("no encyclopedia article for %q in %s", title, lang)
