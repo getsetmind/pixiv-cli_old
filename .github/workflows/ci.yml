@@ -59,7 +59,6 @@ jobs:
         shell: bash
     env:
       CGO_ENABLED: "1"
-      PATH: C:\msys64\mingw64\bin;C:\msys64\usr\bin;${{ github.path }}
     steps:
       - uses: actions/checkout@v7.0.0
         with:
@@ -68,6 +67,11 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # gcc lives in MSYS2 on this image but is not on PATH. Appending to PATH
+      # keeps the runner's own tools reachable; replacing it once removed
+      # powershell and broke checkout before a single test ran.
+      - name: put mingw on PATH
+        run: echo "PATH=$PATH:/c/msys64/mingw64/bin:/c/msys64/usr/bin" >> "$GITHUB_ENV"
       - name: gofmt
         run: |
           unformatted=$(gofmt -s -l .)
