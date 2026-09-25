@@ -72,13 +72,14 @@ jobs:
         with:
           persist-credentials: false
       - name: locate a C compiler
+        shell: bash {0}
         run: |
-          for d in /c/msys64/mingw64/bin /c/msys64/usr/bin /c/Strawberry/c/bin "/c/Program Files/LLVM/bin"; do
+          for d in /c/msys64/mingw64/bin /c/msys64/usr/bin /c/Strawberry/c/bin "/c/Program Files/LLVM/bin" /c/ProgramData/chocolatey/bin; do
             echo "== $d"
-            ls "$d" 2>/dev/null | grep -iE '^(gcc|clang)' | head -5
+            ls "$d" 2>&1 | grep -iE 'gcc|clang' | head -5
           done
-          echo "== which gcc: $(which gcc 2>/dev/null)"
-          echo "== which clang: $(which clang 2>/dev/null)"
+          echo "== gcc: $(command -v gcc)"
+          echo "== clang: $(command -v clang)"
       - uses: actions/setup-go@v6.4.0
         with:
           go-version-file: go.mod
