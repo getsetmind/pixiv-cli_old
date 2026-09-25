@@ -24,43 +24,50 @@ const DefaultUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleW
 
 // Config holds constructor parameters.
 type Config struct {
-	BaseURL   string
-	UserAgent string
-	Rate      time.Duration
-	Retries   int
-	Timeout   time.Duration
+	BaseURL    string
+	DicBaseURL string
+	UserAgent  string
+	Rate       time.Duration
+	Retries    int
+	Timeout    time.Duration
 }
 
 // DefaultConfig returns sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		BaseURL:   "https://www.pixiv.net",
-		UserAgent: DefaultUserAgent,
-		Rate:      200 * time.Millisecond,
-		Retries:   3,
-		Timeout:   30 * time.Second,
+		BaseURL:    BaseURL,
+		DicBaseURL: DicBaseURL,
+		UserAgent:  DefaultUserAgent,
+		Rate:       200 * time.Millisecond,
+		Retries:    3,
+		Timeout:    30 * time.Second,
 	}
 }
 
-// Client talks to the Pixiv ranking API.
+// Client talks to the Pixiv ranking API and the Pixiv encyclopedia.
 type Client struct {
 	httpClient *http.Client
 	userAgent  string
 	rate       time.Duration
 	retries    int
 	baseURL    string
+	dicBaseURL string
 	mu         sync.Mutex
 	last       time.Time
 }
 
 // NewClient returns a Client with the given config.
 func NewClient(cfg Config) *Client {
+	if cfg.DicBaseURL == "" {
+		cfg.DicBaseURL = DicBaseURL
+	}
 	return &Client{
 		httpClient: &http.Client{Timeout: cfg.Timeout},
 		userAgent:  cfg.UserAgent,
 		rate:       cfg.Rate,
 		retries:    cfg.Retries,
 		baseURL:    cfg.BaseURL,
+		dicBaseURL: cfg.DicBaseURL,
 	}
 }
 
@@ -73,7 +80,7 @@ func (c *Client) Ranking(ctx context.Context, mode, content string, page, limit 
 	rawURL := fmt.Sprintf("%s/ranking.php?mode=%s&content=%s&format=json&p=%d",
 		c.baseURL, mode, content, page)
 
-	body, err := c.get(ctx, rawURL)
+	body, err := c.get(ctx, rawURL, "application/json", pixivReferer)
 	if err != nil {
 		return nil, err
 	}
@@ -95,8 +102,20 @@ func (c *Client) Ranking(ctx context.Context, mode, content string, page, limit 
 	return out, nil
 }
 
-// get fetches a URL with pacing, Referer header, and retries.
-func (c *Client) get(ctx context.Context, rawURL string) ([]byte, error) {
+// HTTPError is a non-2xx response from Pixiv, kept typed so callers can map it
+// onto the kit error taxonomy.
+type HTTPError struct {
+	StatusCode int
+	URL        string
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("http %d: %s", e.StatusCode, e.URL)
+}
+
+// get fetches a URL with pacing, the given Accept and Referer headers, and
+// retries on transient failures.
+func (c *Client) get(ctx context.Context, rawURL, accept, referer string) ([]byte, error) {
 	var lastErr error
 	for attempt := 0; attempt <= c.retries; attempt++ {
 		if attempt > 0 {
@@ -106,7 +125,7 @@ func (c *Client) get(ctx context.Context, rawURL string) ([]byte, error) {
 			case <-time.After(backoff(attempt)):
 			}
 		}
-		body, retry, err := c.do(ctx, rawURL)
+		body, retry, err := c.do(ctx, rawURL, accept, referer)
 		if err == nil {
 			return body, nil
 		}
@@ -118,15 +137,15 @@ func (c *Client) get(ctx context.Context, rawURL string) ([]byte, error) {
 	return nil, fmt.Errorf("get %s: %w", rawURL, lastErr)
 }
 
-func (c *Client) do(ctx context.Context, rawURL string) ([]byte, bool, error) {
+func (c *Client) do(ctx context.Context, rawURL, accept, referer string) ([]byte, bool, error) {
 	c.pace()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, false, err
 	}
 	req.Header.Set("User-Agent", c.userAgent)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Referer", pixivReferer)
+	req.Header.Set("Accept", accept)
+	req.Header.Set("Referer", referer)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -135,10 +154,10 @@ func (c *Client) do(ctx context.Context, rawURL string) ([]byte, bool, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-		return nil, true, fmt.Errorf("http %d", resp.StatusCode)
+		return nil, true, &HTTPError{StatusCode: resp.StatusCode, URL: rawURL}
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, false, fmt.Errorf("http %d", resp.StatusCode)
+		return nil, false, &HTTPError{StatusCode: resp.StatusCode, URL: rawURL}
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
