@@ -29,6 +29,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # gofmt reports every file once the checkout has CRLF endings, which git
+      # produces on Windows whenever core.autocrlf is on. Pinning the checkout
+      # to LF keeps the check about formatting rather than line endings.
+      - name: normalize line endings
+        run: |
+          git config core.autocrlf false
+          git rm --cached -r --quiet .
+          git reset --hard --quiet
       - name: gofmt
         run: |
           unformatted=$(gofmt -s -l .)
@@ -67,6 +75,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # gofmt reports every file once the checkout has CRLF endings, which git
+      # produces on Windows whenever core.autocrlf is on. Pinning the checkout
+      # to LF keeps the check about formatting rather than line endings.
+      - name: normalize line endings
+        run: |
+          git config core.autocrlf false
+          git rm --cached -r --quiet .
+          git reset --hard --quiet
       # gcc lives in MSYS2 on this image but is not on PATH. Appending to PATH
       # keeps the runner's own tools reachable; replacing it once removed
       # powershell and broke checkout before a single test ran.
